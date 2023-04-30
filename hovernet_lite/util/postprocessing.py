@@ -1,5 +1,5 @@
 import json
-from typing import Callable, Set, Dict
+from typing import Callable, Set
 import cv2
 import numpy as np
 from scipy.ndimage import measurements, binary_fill_holes
@@ -7,7 +7,7 @@ from skimage.draw import polygon
 from skimage.morphology import remove_small_objects
 from skimage.segmentation import watershed
 from typing import List
-from .infer_helper import NucGeoData, InstClass
+from hovernet_lite.data_type import InstClass, NucGeoData
 import matplotlib.cm as cm
 import os
 import imageio
@@ -99,13 +99,21 @@ def get_bounding_box(img):
     return [rmin, rmax, cmin, cmax]
 
 
-def pixel_value(image_type: int, inst_class: InstClass, inst_id):
+def pixel_value(image_type: int, inst_class: InstClass, inst_id) -> np.uint8:
     assert image_type in SET_VALID_IMG_TYPE
+    assert inst_class == IMG_TYPE_INST or 0. <= inst_class['probability'] <= 1., \
+        f"If inst_class is IMG_TYPE_PROB, then the" \
+        f" probability field value must be within 0. and 1." \
+        f"Got {inst_class['probability']}"
+
+    # only read from inst_class['probability'] if necessary, otherwise just return a 0 dummy value
+    # into the value_dict.
+    prob_val = 0 if inst_class == IMG_TYPE_INST else inst_class['probability'] * 255
     value_dict = {
         IMG_TYPE_INST: inst_id,
-        IMG_TYPE_PROB: inst_class['probability']
+        IMG_TYPE_PROB: prob_val
     }
-    return value_dict[image_type]
+    return np.uint8(np.round(value_dict[image_type]))
 
 
 def get_img_from_json_coords(tile_size, nuc_geo_list: List[NucGeoData], image_type: int):
@@ -126,20 +134,20 @@ def to_gray_mask(inst_map: np.ndarray) -> np.ndarray:
     return gray_cmap(inst_map)[:, :, 0]
 
 
-def save_image_on_flag(nuc_mask: np.ndarray, save_flag: bool, export_folder, name_id: str):
+def save_image_on_flag(nuc_mask: np.ndarray, save_flag: bool, export_folder, prefix: str, suffix=".png"):
     if not save_flag:
         return
-    export_file_name = os.path.join(export_folder, f"{name_id}.png")
+    export_file_name = os.path.join(export_folder, f"{prefix}{suffix}")
     directory = os.path.dirname(export_file_name)
     os.makedirs(directory, exist_ok=True)
     # noinspection PyTypeChecker
     imageio.imwrite(export_file_name, nuc_mask)
 
 
-def save_json_on_flag(data, save_flag: bool, export_folder, name_id: str):
+def save_json_on_flag(data, save_flag: bool, export_folder, prefix: str, suffix=".json"):
     if not save_flag:
         return
-    export_file_name = os.path.join(export_folder, f"{name_id}.json")
+    export_file_name = os.path.join(export_folder, f"{prefix}{suffix}")
     directory = os.path.dirname(export_file_name)
     os.makedirs(directory, exist_ok=True)
     with open(export_file_name, 'w') as root:

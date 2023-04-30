@@ -5,46 +5,16 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
-from typing import List, Dict, Union, TypedDict, Tuple
+from typing import List, Dict, Union, Tuple
 from torch.utils.data import DataLoader
-from .postprocessing import processed_nuclei_pred, get_bounding_box
-from .dataset import SimpleSeqDataset
 
-
-class InstInfo(TypedDict):
-    bbox: Union[np.ndarray, None]
-    centroid: Union[np.ndarray, None]
-    contour: Union[np.ndarray, None]
-    type_prob: Union[float, None]
-    type: Union[int, None]
-
-
-class InstGeo(TypedDict):
-    type: str
-    coordinates: List[List[List[float]]]
-
-
-class InstClass(TypedDict):
-    name: str
-    probability: float
-
-
-class InstProperties(TypedDict):
-    isLocked: str
-    measurements: List
-    classification: InstClass
-
-
-class NucGeoData(TypedDict):
-    type: str
-    id: str
-    tile_size: int
-    geometry: InstGeo
-    properties: InstProperties
+from hovernet_lite.data_type import InstInfo, InstGeo, InstClass, InstProperties, NucGeoData
+from hovernet_lite.util.postprocessing import processed_nuclei_pred, get_bounding_box
+from hovernet_lite.infer_manager.dataset_proto import SimpleSeqDataset
 
 
 class Inference:
-    MAX_DATA_COUNT = np.inf()
+    MAX_DATA_COUNT = np.inf
     DEFAULT_OFFSET: int = 92 // 2
 
     model: nn.Module
@@ -239,7 +209,7 @@ class Inference:
             if "tp" in pred_dict:
                 type_map = F.softmax(pred_dict["tp"], dim=-1)
                 type_map = torch.argmax(type_map, dim=-1, keepdim=True)
-                type_map = type_map.type(torch.FloatTensor)
+                type_map = type_map.type(torch.FloatTensor).to('cuda')
                 pred_dict["tp"] = type_map
             pred_output = torch.cat(list(pred_dict.values()), -1)
 
@@ -302,6 +272,7 @@ class Inference:
                 contour_coords: np.ndarray = np.array(inst_info['contour'])
                 # add the offset and the base coord --> so this can be reused for multiple tiles if stitch is
                 # necessary in future steps (e.g., WSI masks)
+
                 contour_coords += [base_coord_single[0] + offset, base_coord_single[1] + offset]
 
                 # noinspection PyTypeChecker
@@ -321,8 +292,8 @@ class Inference:
         return geo_data_batch
 
     @staticmethod
-    def _default_batch_coords(num_batch):
-        return (0, 0) * num_batch
+    def _default_batch_coords(num_batch) -> List[Tuple[int, int]]:
+        return [(0, 0)] * num_batch
 
     def infer(self,
               batch_img: torch.Tensor,
@@ -339,6 +310,7 @@ class Inference:
         Returns:
 
         """
+        batch_img = batch_img.type(torch.FloatTensor).to('cuda')
         if batch_base_coords is None:
             batch_base_coords = Inference._default_batch_coords(batch_img.shape[0])
         geo_data_batch = Inference.process_batch_geo_data(self.model,
@@ -372,12 +344,12 @@ class Inference:
         data_loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False,
                                  pin_memory=True)
         geo_collection = []
-        name_id_collection = []
+        suffix_collection = []
         for batch in data_loader:
             batch_img: torch.Tensor = batch[SimpleSeqDataset.KEY_IMG]
-            name_ids: List[str] = batch[SimpleSeqDataset.KEY_NAME_ID]
+            prefix_list: List[str] = batch[SimpleSeqDataset.KEY_NAME_PREFIX]
 
             geo_data_batch = self.infer(batch_img, num_of_nuc_types, batch_base_coords, offset)
             geo_collection.append(geo_data_batch)
-            name_id_collection.append(name_ids)
-        return sum(geo_collection, []), sum(name_id_collection, [])
+            suffix_collection.append(prefix_list)
+        return sum(geo_collection, []), sum(suffix_collection, [])
