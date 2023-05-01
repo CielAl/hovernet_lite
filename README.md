@@ -2,6 +2,8 @@
 A compact and lightweighted version of HoverNet, derived and adapted from the [official PyTorch implementation](https://github.com/vqdang/hover_net) 
 The sample pretrained monusac and pannuke models from the official repository are stored in ./pretrained_models/ along with the corresponding type info JSON files.
 
+Some of the code are derived by Can Koyuncu (cfk29@case.edu)
+
 The libary unwrap the inference procedure and expose the convention of dataset in `hovernet_lite.infer_manager.data_proto.SimpleSeqDataset` which allows the customization of most of input formats other than tiles, (e.g., WSI + cooresponding bounding box of tiles to segment or HDF5 dataset so long as the corresponding reading protocal is defined as the loading function `SimpleSeqDataset.loader` of the dataset). Details are listed in dosctring inside `hovernet_lite.infer_manager.data_proto` and  `hovernet_lite.infer`.
 
 ### TODO: WSI-level mask generation
