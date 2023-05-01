@@ -10,21 +10,24 @@ class BaseArgs(ABC):
     def base_arg_parser():
         parser = argparse.ArgumentParser(prog=BaseArgs.PROG, description='Run a lite version of HoverNet for Inference')
         parser.add_argument("--data_pattern", help="input wildcard", type=str, required=True)
-        parser.add_argument("--weight_path", help="Path of the model to load", type=str,
+        parser.add_argument("--weight_path", help="Path of the pretrained model to load", type=str,
                             default='./pretrained_models/hovernet_fast_monusac_type_tf2pytorch.tar')
-        parser.add_argument("--net_mode", help="Infer Mode", type=str,
-                            default='fast')
-        parser.add_argument("--default_num_type", help="Default Number of Nucleus Types if Type Info is Missing",
+        parser.add_argument("--net_mode", help="Infer Mode - chose from original and fast", type=str,
+                            default='fast', choices=['original', 'fast'])
+        parser.add_argument("--default_num_type", help="Default Number of Nucleus Types if Type Info is Missing."
+                                                       "Num of nucleus types is len(type_info_json) - 1",
                             type=int)
-        parser.add_argument("--pad_size", help="Padding to input images", type=int,
+        parser.add_argument("--pad_size", help="Padding to input images. The default value of the official branch "
+                                               "is 48", type=int,
                             default=48)
 
         parser.add_argument("--resize_in", help="Resize tile after being read, e.g., if there is GPU VRAM limit",
                             type=int)
-        parser.add_argument("--resize_out", help="Resize mask if necessary, e.g., if there is GPU VRAM limit",
+        parser.add_argument("--resize_out", help="Resize mask if necessary, e.g., if the resize_in is set due to"
+                                                 "VRAM limitation and the mask of original size is desired.",
                             type=int)
 
-        parser.add_argument("--batch_size", help="Batch Size", type=int,
+        parser.add_argument("--batch_size", help="Batch size for the dataloader during inference procedure", type=int,
                             default=6)
 
         parser.add_argument("--num_workers", help="Num of workers in data loader", type=int,
@@ -38,16 +41,18 @@ class BaseArgs(ABC):
         parser.add_argument("--export_folder", help="Export Folder", type=str,
                             default='./samples/output/')
 
-        parser.add_argument("--save_json", help="Flag to Export Json", type=int,
+        parser.add_argument("--save_json", help="Flag to Export geojson of nuclei for each mask", type=int,
                             default=0)
 
         parser.add_argument("--save_mask", help="Flag to Export Mask", type=int,
                             default=1)
 
-        parser.add_argument("--extract_tile", help="Flag to Export Tiles (e.g., for inspection)",
+        parser.add_argument("--extract_tile", help="Flag to export mask-overlaid tiles (e.g., for inspection)",
                             action='store_true', default=False)
 
-        parser.add_argument("--mask_type", help="Flag to Export Mask", type=str,
+        parser.add_argument("--mask_type", help="Flag to Export Mask - inst: pixel value as inst/class id."
+                                                "binary - binary mask of wherever nuclei presents."
+                                                "prob - the softmax score map of nuclei vs. background", type=str,
                             default='prob', choices=['prob', 'binary', 'inst'])
 
         parser.add_argument("--group_out", help="Whether to group the outputs by the asterisk-matched subdirectories"
@@ -58,7 +63,8 @@ class BaseArgs(ABC):
                             default=False)
 
         parser.add_argument("--group_by_file", help="Additional to --group_out, whether group on individual input file"
-                                                    "e.g., for input fileA.png, a folder fileA will be created as well."
+                                                    "e.g., for input pattern: *.png and a matach: fileA.png,"
+                                                    " a folder fileA will be created if this flag is set."
                                                     "No effect if group_out is False",
                             default=False,
                             action='store_true')
