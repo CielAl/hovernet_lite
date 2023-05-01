@@ -39,7 +39,7 @@ class BaseArgs(ABC):
         parser.add_argument("--type_info_path", help="Path of the type_info_json", type=str,
                             default='./type_info/type_info_monusac.json')
         parser.add_argument("--export_folder", help="Export Folder", type=str,
-                            default='./samples/output/')
+                            required=True)
 
         parser.add_argument("--save_json", help="Flag to Export geojson of nuclei for each mask", type=int,
                             default=0)

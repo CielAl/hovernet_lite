@@ -95,7 +95,10 @@ def _sanitize_files(wsi_files, bbox_files, bbox_suffix):
     for wsi in wsi_files:
         basename = os.path.basename(wsi)
         corresponding_bbox_name = f"{basename}{bbox_suffix}"
-        assert corresponding_bbox_name in bbox_set, f"{corresponding_bbox_name} not found in bbox lists"
+        if corresponding_bbox_name not in bbox_set:
+            logger.warning(f"{corresponding_bbox_name} not found in bbox lists")
+            wsi_files.remove(wsi)
+    return wsi_files
 
 
 def _dict_by_bname(file_list) -> Dict[str, str]:
@@ -116,9 +119,16 @@ def wsi_tile_coords(wsi_files,
     Returns:
 
     """
-    _sanitize_files(wsi_files, bbox_files, bbox_suffix)
+    # remove wsi  from the list that does not have a corresponding bbox
+    wsi_files = _sanitize_files(wsi_files, bbox_files, bbox_suffix)
+    logger.info(f"{len(wsi_files)} images matched.")
+    assert len(wsi_files) > 0, f"{len(wsi_files)} images remained after matching to the bbox list"
+
+    # basename --> fullpath
     wsi_dict = _dict_by_bname(wsi_files)
     bbox_dict = _dict_by_bname(bbox_files)
+
+    # bbox aligned to wsi - for each wsi remained in the list, map it to the
     wsi_to_bbox_loc: Dict[str, str] = {wsi_full: bbox_dict[f"{wsi_base}{bbox_suffix}"]
                                        for wsi_base, wsi_full in wsi_dict.items()}
     # 1 wsi --> multiple bbox (list of bbox)
