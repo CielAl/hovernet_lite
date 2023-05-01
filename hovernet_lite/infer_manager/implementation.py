@@ -8,6 +8,7 @@ from torch.nn import functional as F
 from typing import List, Dict, Union, Tuple, Generator
 from torch.utils.data import DataLoader
 
+from hovernet_lite.constants import DEFAULT_NUC_OFFSET
 from hovernet_lite.data_type import InstInfo, InstGeo, InstClass, InstProperties, NucGeoData
 from hovernet_lite.util.postprocessing import processed_nuclei_pred, get_bounding_box
 from hovernet_lite.infer_manager.dataset_proto import SimpleSeqDataset
@@ -18,7 +19,7 @@ logger = get_logger(__name__)
 
 class Inference:
     MAX_DATA_COUNT = np.inf
-    DEFAULT_OFFSET: int = 92 // 2
+    DEFAULT_OFFSET: int = DEFAULT_NUC_OFFSET
 
     model: nn.Module
     type_info: Dict[str, List[Union[str, int]]]
@@ -335,7 +336,7 @@ class Inference:
                       num_workers: int = 0,
                       batch_base_coords: Union[np.ndarray, List[Union[Tuple[int, int], np.ndarray]], None] = None,
                       offset: int = DEFAULT_OFFSET)\
-            -> Generator[Tuple[List[List[NucGeoData]], List[str]], None, None]:
+            -> Generator[Tuple[List[List[NucGeoData]], torch.Tensor, List[str]], None, None]:
         """
 
         Args:
@@ -361,5 +362,5 @@ class Inference:
             # geo_collection.append(geo_data_batch)
             # suffix_collection.append(prefix_list)
             # still batchiftied (List[List[GeoDat]] --> flatten to list[Geodata] i.e.
-            yield geo_data_batch, prefix_list
+            yield geo_data_batch, batch_img.detach().cpu(), prefix_list
         # return sum(geo_collection, []), sum(suffix_collection, [])

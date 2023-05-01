@@ -1,5 +1,9 @@
 import json
+import logging
 from typing import Callable, Set
+import cv2
+from skimage.util import img_as_ubyte
+import PIL.Image
 import cv2
 import numpy as np
 from scipy.ndimage import measurements, binary_fill_holes
@@ -12,6 +16,7 @@ import matplotlib.cm as cm
 import os
 import imageio
 from .misc import save_json
+import torch
 
 
 gray_cmap: Callable[[np.ndarray], np.ndarray] = cm.get_cmap("gray")
@@ -119,9 +124,10 @@ def pixel_value(image_type: str, inst_class: InstClass, inst_id) -> np.uint8:
     return np.uint8(np.round(value_dict[image_type]))
 
 
-def get_img_from_json_coords(tile_size, nuc_geo_list: List[NucGeoData], image_type: str):
+def get_img_from_json_coords(tile_size, nuc_geo_list: List[NucGeoData], image_type: str, im=None):
     # data = json.loads(value)
-    im = np.zeros((tile_size, tile_size), 'uint8')
+    if im is None:
+        im = np.zeros((tile_size, tile_size), 'uint8')
     for idx, nuc_geo in enumerate(nuc_geo_list, start=1):
         coords = nuc_geo['geometry']['coordinates']
         for c in coords:
@@ -137,14 +143,14 @@ def to_gray_mask(inst_map: np.ndarray) -> np.ndarray:
     return gray_cmap(inst_map)[:, :, 0]
 
 
-def save_image_on_flag(nuc_mask: np.ndarray, save_flag: bool, export_folder, prefix: str, suffix=".png"):
+def save_image_on_flag(img: np.ndarray, save_flag: bool, export_folder, prefix: str, suffix=".png"):
     if not save_flag:
         return
     export_file_name = os.path.join(export_folder, f"{prefix}{suffix}")
     directory = os.path.dirname(export_file_name)
     os.makedirs(directory, exist_ok=True)
     # noinspection PyTypeChecker
-    imageio.imwrite(export_file_name, nuc_mask)
+    imageio.imwrite(export_file_name, img)
 
 
 def save_json_on_flag(data, save_flag: bool, export_folder, prefix: str, suffix=".json"):
@@ -156,3 +162,35 @@ def save_json_on_flag(data, save_flag: bool, export_folder, prefix: str, suffix=
     # with open(export_file_name, 'w') as root:
     #     json.dump(data, root, indent=4)
     save_json(export_file_name, data=data, indent=4)
+
+
+def save_overlaid_tile_on_flag(tile: torch.Tensor,
+                               mask: np.ndarray,
+                               flag: bool,
+                               transforms: Callable[[torch.Tensor], PIL.Image.Image],
+                               export_folder: str,
+                               prefix: str):
+    """
+    Export a tile for inspection if flag is set.
+    Args:
+        tile: individual tile
+        mask: individual mask
+        flag:
+        transforms:
+        export_folder:
+        prefix:
+
+    Returns:
+
+    """
+    if not flag:
+        return
+    mask_ubyte = img_as_ubyte(mask)
+    tile_pil = transforms(tile).convert("RGB")
+    # noinspection PyTypeChecker
+    tile_array = np.array(tile_pil, copy=False)
+    prob_map = cv2.applyColorMap(mask_ubyte, cv2.COLORMAP_JET)
+
+    # Overlay the color map on the image using addWeighted()
+    overlay = cv2.addWeighted(tile_array, 0.7, prob_map, 0.3, 0)
+    save_image_on_flag(overlay, flag, export_folder, prefix, suffix='_overlaid.jpg')

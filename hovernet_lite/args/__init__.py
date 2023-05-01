@@ -39,10 +39,13 @@ class BaseArgs(ABC):
                             default='./samples/output/')
 
         parser.add_argument("--save_json", help="Flag to Export Json", type=int,
-                            default=1)
+                            default=0)
 
         parser.add_argument("--save_mask", help="Flag to Export Mask", type=int,
                             default=1)
+
+        parser.add_argument("--extract_tile", help="Flag to Export Tiles (e.g., for inspection)",
+                            action='store_true', default=False)
 
         parser.add_argument("--mask_type", help="Flag to Export Mask", type=str,
                             default='prob', choices=['prob', 'binary', 'inst'])

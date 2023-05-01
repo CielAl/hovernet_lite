@@ -1,6 +1,6 @@
 import logging
 
-DEFAULT_LEVEL = logging.INFO
+from hovernet_lite.constants import DEFAULT_LEVEL
 
 
 def get_logger(name, level=DEFAULT_LEVEL) -> logging.Logger:
