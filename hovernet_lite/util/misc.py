@@ -1,20 +1,19 @@
-import logging
 import os.path
 from typing import List, Tuple
 import re
 import json
+import datetime
 
 REG_BRACKET = r'\[.*?\]'
 REG_ASTERISK = r'\*+'
 REG_SINGLE = r'\?+'
 
 REG_WILD = '|'.join([REG_BRACKET, REG_ASTERISK, REG_SINGLE])
+DEFAULT_TIME_FORMAT = "%Y%m%d%H%M%S"
 
 
-def get_logger(name, level=logging.INFO):
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    return logger
+def get_timestamp(time_format=DEFAULT_TIME_FORMAT):
+    return datetime.datetime.now().strftime(time_format)
 
 
 def path_components(path: str, max_depth=65536) -> List[str]:
@@ -55,3 +54,8 @@ def find_wildcards(path: str) -> Tuple[List[str], List[int]]:
 def load_json(uri: str):
     with open(uri, 'r') as root:
         return json.load(root)
+
+
+def save_json(uri: str, data, indent=4):
+    with open(uri, 'w') as root:
+        return json.dump(data, root, indent=indent)

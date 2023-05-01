@@ -5,12 +5,15 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
-from typing import List, Dict, Union, Tuple
+from typing import List, Dict, Union, Tuple, Generator
 from torch.utils.data import DataLoader
 
 from hovernet_lite.data_type import InstInfo, InstGeo, InstClass, InstProperties, NucGeoData
 from hovernet_lite.util.postprocessing import processed_nuclei_pred, get_bounding_box
 from hovernet_lite.infer_manager.dataset_proto import SimpleSeqDataset
+from hovernet_lite.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class Inference:
@@ -25,6 +28,8 @@ class Inference:
         self.model = model
         self.type_info = type_info
         self.max_count = max_count
+        for params in self.model.parameters():
+            params.requires_grad_(False)
 
     @classmethod
     def build(cls, model, type_info, max_count: Union[int, float] = MAX_DATA_COUNT):
@@ -200,21 +205,23 @@ class Inference:
 
         # --------------------------------------------------------------
         with torch.no_grad():  # dont compute gradient
+            logger.debug(f"Batch Size: {batch_imgs.shape[0]}")
+            batch_imgs = batch_imgs.type(torch.FloatTensor).to('cuda')
             pred_dict = model(batch_imgs)
             pred_dict = OrderedDict(
-                [(k, v.permute(0, 2, 3, 1).contiguous()) for k, v in pred_dict.items()]
+                [(k, v.permute(0, 2, 3, 1).contiguous().detach().cpu()) for k, v in pred_dict.items()]
             )
 
-            pred_dict["np"] = F.softmax(pred_dict["np"], dim=-1)[..., 1:]
+            pred_dict["np"] = F.softmax(pred_dict["np"], dim=-1)[..., 1:].detach().cpu()
             if "tp" in pred_dict:
                 type_map = F.softmax(pred_dict["tp"], dim=-1)
                 type_map = torch.argmax(type_map, dim=-1, keepdim=True)
-                type_map = type_map.type(torch.FloatTensor).to('cuda')
+                type_map = type_map.type(torch.FloatTensor).detach().cpu()
                 pred_dict["tp"] = type_map
             pred_output = torch.cat(list(pred_dict.values()), -1)
 
         # * Its up to user to define the protocol to process the raw output per step!
-        pred_output = pred_output.cpu().numpy()
+        pred_output = pred_output.detach().cpu().numpy()
         batch_inst_info = []
         for i in range(pred_output.shape[0]):
             inst_info = Inference.process_info_dict(pred_output[i, ...],
@@ -308,9 +315,8 @@ class Inference:
             offset: Offset to correct the contour lines.
 
         Returns:
-
+             List[List[NucGeoData]]: List[NucGeoData] --> all nuclei of one input --> batchify
         """
-        batch_img = batch_img.type(torch.FloatTensor).to('cuda')
         if batch_base_coords is None:
             batch_base_coords = Inference._default_batch_coords(batch_img.shape[0])
         geo_data_batch = Inference.process_batch_geo_data(self.model,
@@ -328,7 +334,8 @@ class Inference:
                       batch_size: int = 1,
                       num_workers: int = 0,
                       batch_base_coords: Union[np.ndarray, List[Union[Tuple[int, int], np.ndarray]], None] = None,
-                      offset: int = DEFAULT_OFFSET) -> Tuple[List[List[NucGeoData]], List[str]]:
+                      offset: int = DEFAULT_OFFSET)\
+            -> Generator[Tuple[List[List[NucGeoData]], List[str]], None, None]:
         """
 
         Args:
@@ -342,14 +349,17 @@ class Inference:
 
         """
         data_loader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False,
-                                 pin_memory=True)
-        geo_collection = []
-        suffix_collection = []
+                                 pin_memory=False)
+        # geo_collection = []
+        # suffix_collection = []
         for batch in data_loader:
+
             batch_img: torch.Tensor = batch[SimpleSeqDataset.KEY_IMG]
             prefix_list: List[str] = batch[SimpleSeqDataset.KEY_NAME_PREFIX]
-
+            logger.debug(f"Process Batch: {batch_img.shape}")
             geo_data_batch = self.infer(batch_img, num_of_nuc_types, batch_base_coords, offset)
-            geo_collection.append(geo_data_batch)
-            suffix_collection.append(prefix_list)
-        return sum(geo_collection, []), sum(suffix_collection, [])
+            # geo_collection.append(geo_data_batch)
+            # suffix_collection.append(prefix_list)
+            # still batchiftied (List[List[GeoDat]] --> flatten to list[Geodata] i.e.
+            yield geo_data_batch, prefix_list
+        # return sum(geo_collection, []), sum(suffix_collection, [])

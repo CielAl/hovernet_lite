@@ -1,14 +1,24 @@
-import glob
+import logging
 import os
-from typing import Tuple, List, Dict
+from typing import List, Dict, TypedDict
 import geojson
-
+import traceback
+from hovernet_lite.util.misc import save_json, get_timestamp
 from hovernet_lite.model.builder import load_model
-from hovernet_lite.infer_manager.dataset_proto import batch_pre_processor, SimpleSeqDataset, pil_loader
+from hovernet_lite.infer_manager.dataset_proto import SimpleSeqDataset
 from hovernet_lite.infer_manager.implementation import Inference
 from hovernet_lite.data_type import NucGeoData
-from hovernet_lite.util.postprocessing import get_img_from_json_coords, IMG_TYPE_PROB, save_json_on_flag, \
+from hovernet_lite.util.postprocessing import get_img_from_json_coords, save_json_on_flag, \
     save_image_on_flag
+from hovernet_lite.infer_manager.dataset_proto import post_processor
+import numpy as np
+
+
+class ErrorInfo(TypedDict):
+    error_msg: str
+    stack_trace: str
+    name: str
+    batch_name_list: List[str]
 
 
 def num_nucleus_type(type_info: Dict, default: int):
@@ -19,7 +29,32 @@ def num_nucleus_type(type_info: Dict, default: int):
     return int(default)
 
 
-def main_process(opt, logger, dataset: SimpleSeqDataset):
+def batch_process(geo_data_batch, prefix_batch, logger, opt):
+    for geo_data_list, prefix_single in zip(geo_data_batch, prefix_batch):
+        geo_data_list: List[NucGeoData]
+        logger.info(f"Working on {prefix_single}")
+        if len(geo_data_list) <= 0:
+            continue
+        tile_size = geo_data_list[0]['tile_size']
+        size_incr = 2 * opt.pad_size
+
+        im = get_img_from_json_coords(tile_size + size_incr, geo_data_list, opt.mask_type)
+        save_json_on_flag(geo_data_list, save_flag=bool(opt.save_json),
+                          export_folder=opt.export_folder, prefix=prefix_single)
+
+        # nuc_mask = im[opt.pad_size:tile_size - opt.pad_size,
+        #               opt.pad_size:tile_size - opt.pad_size]
+        # nuc_pil = Image.fromarray(nuc_mask)
+        nuc_mask = im
+        crop_size = tile_size - size_incr
+        post_proc = post_processor(crop_size, opt.resize_out)
+        nuc_pil = post_proc(nuc_mask)
+        nuc_mask_out = np.array(nuc_pil, copy=False)
+        save_image_on_flag(nuc_mask_out, save_flag=bool(opt.save_mask),
+                           export_folder=opt.export_folder, prefix=prefix_single)
+
+
+def main_process(opt, logger: logging.Logger, dataset: SimpleSeqDataset):
     assert opt.save_json or opt.save_mask, f"Nothing to Export - Either save_mask or save_json must be set to True"
 
     # start
@@ -27,7 +62,7 @@ def main_process(opt, logger, dataset: SimpleSeqDataset):
     os.environ["CUDA_VISIBLE_DEVICES"] = opt.visible_device
 
     # net inputs and data
-    size_incr = 2 * opt.pad_size
+
     with open(opt.type_info_path, 'r') as f:
         type_info = geojson.load(f)
     # read num
@@ -37,23 +72,37 @@ def main_process(opt, logger, dataset: SimpleSeqDataset):
     model = load_model(opt.weight_path, opt.net_mode, num_of_nuc_types=num_of_nuc_types)
     logger.info('Model has been loaded.')
     infer = Inference.build(model, type_info=type_info)
-    result: Tuple[List[List[NucGeoData]], List[str]] = infer.infer_dataset(dataset,
-                                                                           num_of_nuc_types=num_of_nuc_types,
-                                                                           batch_size=opt.batch_size,
-                                                                           num_workers=opt.num_workers
-                                                                           )
-    geo_collection, prefix_list = result
-    for geo_data_list, prefix_single in zip(geo_collection, prefix_list):
-        if len(geo_data_list) <= 0:
-            continue
-        tile_size = geo_data_list[0]['tile_size']
-        im = get_img_from_json_coords(tile_size + size_incr, geo_data_list, IMG_TYPE_PROB)
-        save_json_on_flag(geo_data_list, save_flag=opt.save_json,
-                          export_folder=opt.export_folder, prefix=prefix_single)
+    # result: Tuple[List[List[NucGeoData]], List[str]] = infer.infer_dataset(dataset,
+    #                                                                        num_of_nuc_types=num_of_nuc_types,
+    #                                                                        batch_size=opt.batch_size,
+    #                                                                        num_workers=opt.num_workers
+    #                                                                        )
+    # geo_collection, prefix_list = result
+    timestamp_str = get_timestamp()
+    opt_save_name = os.path.join(opt.export_folder, f"opt_{timestamp_str}.json")
+    if os.path.exists(opt_save_name):
+        logger.warning(f"Warning: OPT already exists: {opt_save_name}")
+    save_json(opt_save_name, vars(opt), indent=4)
+    error_data_list = []
+    for geo_data_batch, prefix_batch in infer.infer_dataset(dataset,
+                                                            num_of_nuc_types=num_of_nuc_types,
+                                                            batch_size=opt.batch_size,
+                                                            num_workers=opt.num_workers
+                                                            ):
+        # noinspection PyBroadException
+        try:
+            batch_process(geo_data_batch, prefix_batch, logger, opt)
+        except Exception as e:
+            error_msg = str(e)
+            stack_trace = traceback.format_exc()
+            info_dict = ErrorInfo(error_msg=error_msg, stack_trace=stack_trace,
+                                  name=prefix_batch[0], batch_name_list=prefix_batch)
+            logger.critical(f"{error_msg}")
+            logger.critical(f"{stack_trace}")
+            logger.critical(f"First of batch: {prefix_batch[0]}")
+            logger.critical(f"All Batch: {prefix_batch}")
 
-        nuc_mask = im[opt.pad_size:tile_size - opt.pad_size,
-                      opt.pad_size:tile_size - opt.pad_size]
-        save_image_on_flag(nuc_mask, save_flag=opt.save_mask,
-                           export_folder=opt.export_folder, prefix=prefix_single)
-
+            error_data_list.append(info_dict)
+    error_save_name = os.path.join(opt.export_folder, f"error_{timestamp_str}.json")
+    save_json(error_save_name, error_data_list, indent=4)
     logger.info("Nucleus segmentation done!")

@@ -11,12 +11,14 @@ from hovernet_lite.data_type import InstClass, NucGeoData
 import matplotlib.cm as cm
 import os
 import imageio
+from .misc import save_json
 
 
 gray_cmap: Callable[[np.ndarray], np.ndarray] = cm.get_cmap("gray")
-IMG_TYPE_INST = 0
-IMG_TYPE_PROB = 1
-SET_VALID_IMG_TYPE: Set = {IMG_TYPE_INST, IMG_TYPE_PROB}
+IMG_TYPE_INST = 'inst'
+IMG_TYPE_PROB = 'prob'
+IMG_TYPE_BINARY = 'binary'
+SET_VALID_IMG_TYPE: Set = {IMG_TYPE_INST, IMG_TYPE_PROB, IMG_TYPE_BINARY}
 
 
 def processed_nuclei_pred(pred):
@@ -99,7 +101,7 @@ def get_bounding_box(img):
     return [rmin, rmax, cmin, cmax]
 
 
-def pixel_value(image_type: int, inst_class: InstClass, inst_id) -> np.uint8:
+def pixel_value(image_type: str, inst_class: InstClass, inst_id) -> np.uint8:
     assert image_type in SET_VALID_IMG_TYPE
     assert inst_class == IMG_TYPE_INST or 0. <= inst_class['probability'] <= 1., \
         f"If inst_class is IMG_TYPE_PROB, then the" \
@@ -111,12 +113,13 @@ def pixel_value(image_type: int, inst_class: InstClass, inst_id) -> np.uint8:
     prob_val = 0 if inst_class == IMG_TYPE_INST else inst_class['probability'] * 255
     value_dict = {
         IMG_TYPE_INST: inst_id,
-        IMG_TYPE_PROB: prob_val
+        IMG_TYPE_PROB: prob_val,
+        IMG_TYPE_BINARY: 255,
     }
     return np.uint8(np.round(value_dict[image_type]))
 
 
-def get_img_from_json_coords(tile_size, nuc_geo_list: List[NucGeoData], image_type: int):
+def get_img_from_json_coords(tile_size, nuc_geo_list: List[NucGeoData], image_type: str):
     # data = json.loads(value)
     im = np.zeros((tile_size, tile_size), 'uint8')
     for idx, nuc_geo in enumerate(nuc_geo_list, start=1):
@@ -150,5 +153,6 @@ def save_json_on_flag(data, save_flag: bool, export_folder, prefix: str, suffix=
     export_file_name = os.path.join(export_folder, f"{prefix}{suffix}")
     directory = os.path.dirname(export_file_name)
     os.makedirs(directory, exist_ok=True)
-    with open(export_file_name, 'w') as root:
-        json.dump(data, root, indent=4)
+    # with open(export_file_name, 'w') as root:
+    #     json.dump(data, root, indent=4)
+    save_json(export_file_name, data=data, indent=4)

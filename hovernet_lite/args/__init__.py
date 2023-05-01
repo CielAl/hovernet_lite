@@ -19,6 +19,11 @@ class BaseArgs(ABC):
         parser.add_argument("--pad_size", help="Padding to input images", type=int,
                             default=48)
 
+        parser.add_argument("--resize_in", help="Resize tile after being read, e.g., if there is GPU VRAM limit",
+                            type=int)
+        parser.add_argument("--resize_out", help="Resize mask if necessary, e.g., if there is GPU VRAM limit",
+                            type=int)
+
         parser.add_argument("--batch_size", help="Batch Size", type=int,
                             default=6)
 
@@ -33,23 +38,27 @@ class BaseArgs(ABC):
         parser.add_argument("--export_folder", help="Export Folder", type=str,
                             default='./samples/output/')
 
-        parser.add_argument("--save_json", help="Flag to Export Json", type=bool,
-                            default=True)
+        parser.add_argument("--save_json", help="Flag to Export Json", type=int,
+                            default=1)
 
-        parser.add_argument("--save_mask", help="Flag to Export Mask", type=bool,
-                            default=True)
+        parser.add_argument("--save_mask", help="Flag to Export Mask", type=int,
+                            default=1)
+
+        parser.add_argument("--mask_type", help="Flag to Export Mask", type=str,
+                            default='prob', choices=['prob', 'binary', 'inst'])
 
         parser.add_argument("--group_out", help="Whether to group the outputs by the asterisk-matched subdirectories"
                                                 "For instance, if data_pattern is /A/*/*.png wherein the first asterisk"
                                                 "corresponds to any WSI name, with --group_out enabled the final output"
                                                 "loc will be [export_folder]/[any_matched_wsi_name]/[tile_name]",
-                            type=bool,
-                            default=True)
+                            action='store_true',
+                            default=False)
 
         parser.add_argument("--group_by_file", help="Additional to --group_out, whether group on individual input file"
-                                                    "e.g., for input fileA.png, a folder fileA will be created as well",
-                            type=bool,
-                            default=False)
+                                                    "e.g., for input fileA.png, a folder fileA will be created as well."
+                                                    "No effect if group_out is False",
+                            default=False,
+                            action='store_true')
         # opt, _ = parser.parse_known_args(argv)
         return parser
 
