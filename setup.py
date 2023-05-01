@@ -1,5 +1,6 @@
 from setuptools import setup
-
+with open("requirements.txt", "r") as f:
+    requirements = f.read().splitlines()
 setup(
     name='hovernet_lite',
     version='',
@@ -8,5 +9,6 @@ setup(
     license='',
     author='CielAl',
     author_email='',
-    description=''
+    description='',
+    install_requires=requirements
 )
