@@ -1,4 +1,4 @@
 import logging
 
 DEFAULT_LEVEL = logging.DEBUG
-DEFAULT_NUC_OFFSET = 96  # 92 // 2
+DEFAULT_NUC_OFFSET = 92 // 2  # 92 // 2

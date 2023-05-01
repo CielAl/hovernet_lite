@@ -160,7 +160,7 @@ class Inference:
     @staticmethod
     def process_info_dict(pred_map: np.ndarray,
                           num_of_nuc_types: int = None,
-                          return_centroids: bool = False) -> Dict[int, InstInfo]:
+                          return_centroids: bool = True) -> Dict[int, InstInfo]:
         """Postprocessing script for image tiles.
         Args:
             pred_map: The concatenated prediction outputs from HoverNet: [Tp, Np, Hv]. tp is the map of
@@ -209,10 +209,10 @@ class Inference:
             logger.debug(f"Batch Size: {batch_imgs.shape[0]}")
             batch_imgs = batch_imgs.type(torch.FloatTensor).to('cuda')
             pred_dict = model(batch_imgs)
+
             pred_dict = OrderedDict(
                 [(k, v.permute(0, 2, 3, 1).contiguous().detach().cpu()) for k, v in pred_dict.items()]
             )
-
             pred_dict["np"] = F.softmax(pred_dict["np"], dim=-1)[..., 1:].detach().cpu()
             if "tp" in pred_dict:
                 type_map = F.softmax(pred_dict["tp"], dim=-1)
@@ -261,7 +261,7 @@ class Inference:
 
         list_of_info_dicts: List[Dict[int, InstInfo]] = Inference.batch_inst_info_dict(model,
                                                                                        batch_img,
-                                                                                       num_of_nuc_types)
+                                                                                       num_of_nuc_types,)
         counter = 0
 
         tile_size = batch_img.shape[2]
@@ -280,7 +280,6 @@ class Inference:
                 contour_coords: np.ndarray = np.array(inst_info['contour'])
                 # add the offset and the base coord --> so this can be reused for multiple tiles if stitch is
                 # necessary in future steps (e.g., WSI masks)
-
                 contour_coords += [base_coord_single[0] + offset, base_coord_single[1] + offset]
 
                 # noinspection PyTypeChecker
@@ -296,7 +295,6 @@ class Inference:
                 geo_data_list.append(dict_data)
                 counter += 1
             geo_data_batch.append(geo_data_list)
-
         return geo_data_batch
 
     @staticmethod

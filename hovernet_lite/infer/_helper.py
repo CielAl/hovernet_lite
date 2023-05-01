@@ -43,8 +43,7 @@ def batch_process(geo_data_batch: List[List[NucGeoData]],
             continue
         tile_size = geo_data_list[0]['tile_size']
         size_incr = 2 * opt.pad_size
-
-        im = get_img_from_json_coords(tile_size + size_incr, geo_data_list, opt.mask_type)
+        im = get_img_from_json_coords(tile_size, geo_data_list, opt.mask_type)
         save_json_on_flag(geo_data_list, save_flag=bool(opt.save_json),
                           export_folder=opt.export_folder, prefix=prefix_single)
 

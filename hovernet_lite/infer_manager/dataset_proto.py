@@ -2,7 +2,7 @@ import os.path
 from typing import Callable, Any, List
 from PIL import Image
 from torch.utils.data import Dataset
-from torchvision.transforms import Compose, Pad, PILToTensor, CenterCrop, ToPILImage, Resize
+from torchvision.transforms import Compose, Pad, PILToTensor, CenterCrop, ToPILImage, Resize, ToTensor
 from hovernet_lite.data_type import DatasetOut
 from hovernet_lite.util.misc import find_wildcards, path_components
 
