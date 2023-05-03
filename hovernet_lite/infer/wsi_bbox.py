@@ -180,6 +180,5 @@ if __name__ == '__main__':
     tile_args = BBoxArgs(argv)
     opt = tile_args.get_opts()
     dataset = wsi_bbox_dataset(opt)
-    breakpoint()
     main_process(opt, dataset)
     GlobalLoggers.instance().get_logger(__name__).info("Done")
