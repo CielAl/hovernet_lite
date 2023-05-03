@@ -1,5 +1,4 @@
 from collections import OrderedDict
-
 import cv2
 import numpy as np
 import torch
@@ -12,15 +11,13 @@ from hovernet_lite.constants import DEFAULT_NUC_OFFSET
 from hovernet_lite.data_type import InstInfo, InstGeo, InstClass, InstProperties, NucGeoData
 from hovernet_lite.util.postprocessing import processed_nuclei_pred, get_bounding_box
 from hovernet_lite.infer_manager.dataset_proto import SimpleSeqDataset
-from hovernet_lite.logger import get_logger
-
-logger = get_logger(__name__)
+from hovernet_lite.logger import GlobalLoggers
+# from hovernet_lite.error_handler import remediate_call
+logger = GlobalLoggers.instance().get_logger(__name__)
 
 
 class Inference:
     MAX_DATA_COUNT = np.inf
-    DEFAULT_OFFSET: int = DEFAULT_NUC_OFFSET
-
     model: nn.Module
     type_info: Dict[str, List[Union[str, int]]]
     max_count: Union[float, int]
@@ -238,7 +235,7 @@ class Inference:
                                batch_base_coords: Union[np.ndarray, List[Union[Tuple[int, int], np.ndarray]]],
                                type_info: Dict[str, List[Union[str, int]]],
                                max_count: Union[int, float] = MAX_DATA_COUNT,
-                               offset: int = DEFAULT_OFFSET) -> List[List[NucGeoData]]:
+                               offset: int = DEFAULT_NUC_OFFSET) -> List[List[NucGeoData]]:
         """
         Process the geo data of a batch and write it to geo_data_list
         Args:
@@ -301,11 +298,11 @@ class Inference:
     def _default_batch_coords(num_batch) -> List[Tuple[int, int]]:
         return [(0, 0)] * num_batch
 
-    def infer(self,
-              batch_img: torch.Tensor,
-              num_of_nuc_types: int,
-              batch_base_coords: Union[np.ndarray, List[Union[Tuple[int, int], np.ndarray]], None] = None,
-              offset: int = DEFAULT_OFFSET) -> List[List[NucGeoData]]:
+    def infer_img(self,
+                  batch_img: torch.Tensor,
+                  num_of_nuc_types: int,
+                  batch_base_coords: Union[np.ndarray, List[Union[Tuple[int, int], np.ndarray]], None] = None,
+                  offset: int = DEFAULT_NUC_OFFSET) -> List[List[NucGeoData]]:
         """
         Args:
             batch_img: batch to process
@@ -327,16 +324,30 @@ class Inference:
                                                           offset)
         return geo_data_batch
 
+    def infer_batch(self, batch: Dict[str, Union[torch.Tensor, List[str]]],
+                    num_of_nuc_types: int,
+                    batch_base_coords: Union[np.ndarray, List[Union[Tuple[int, int], np.ndarray]], None] = None,
+                    offset: int = DEFAULT_NUC_OFFSET):
+        batch_img: torch.Tensor = batch[SimpleSeqDataset.KEY_IMG]
+        prefix_list: List[str] = batch[SimpleSeqDataset.KEY_NAME_PREFIX]
+        logger.debug(f"Process Batch: {batch_img.shape}")
+        geo_data_batch = self.infer_img(batch_img, num_of_nuc_types, batch_base_coords, offset)
+        # geo_collection.append(geo_data_batch)
+        # suffix_collection.append(prefix_list)
+        # still batchiftied (List[List[GeoDat]] --> flatten to list[Geodata] i.e.
+        return geo_data_batch, batch_img.detach().cpu(), prefix_list
+
     def infer_dataset(self,
                       dataset: SimpleSeqDataset,
                       num_of_nuc_types: int,
                       batch_size: int = 1,
                       num_workers: int = 0,
                       batch_base_coords: Union[np.ndarray, List[Union[Tuple[int, int], np.ndarray]], None] = None,
-                      offset: int = DEFAULT_OFFSET)\
+                      offset: int = DEFAULT_NUC_OFFSET)\
             -> Generator[Tuple[List[List[NucGeoData]], torch.Tensor, List[str]], None, None]:
         """
-
+        Generator wrapper to process the dataset. Somehow it reduces the readability and make it harder to
+            handle errors while running on HPCs.
         Args:
             dataset: SimpleSeqDataset which returns the image and the name identifier (for export purpose)
             batch_size: batch_size to process within a DataLoader
@@ -351,14 +362,28 @@ class Inference:
                                  pin_memory=False)
         # geo_collection = []
         # suffix_collection = []
+        # for batch_idx in range(len(data_loader)):
         for batch in data_loader:
+            # batch_img: torch.Tensor = batch[SimpleSeqDataset.KEY_IMG]
+            # prefix_list: List[str] = batch[SimpleSeqDataset.KEY_NAME_PREFIX]
+            # logger.debug(f"Process Batch: {batch_img.shape}")
+            # geo_data_batch = self.infer_img(batch_img, num_of_nuc_types, batch_base_coords, offset)
+            # # geo_collection.append(geo_data_batch)
+            # # suffix_collection.append(prefix_list)
+            # # still batchiftied (List[List[GeoDat]] --> flatten to list[Geodata] i.e.
+            # batch_out = self.infer_batch(batch,
+            #                              num_of_nuc_types,
+            #                              batch_base_coords,
+            #                              offset)
+            # batch_out = remediate_call(self.infer_batch, __name__,  batch[SimpleSeqDataset.KEY_NAME_PREFIX],
+            #                            batch, num_of_nuc_types, batch_base_coords, offset)
+            # batch = next(iter(data_loader))
 
-            batch_img: torch.Tensor = batch[SimpleSeqDataset.KEY_IMG]
-            prefix_list: List[str] = batch[SimpleSeqDataset.KEY_NAME_PREFIX]
-            logger.debug(f"Process Batch: {batch_img.shape}")
-            geo_data_batch = self.infer(batch_img, num_of_nuc_types, batch_base_coords, offset)
-            # geo_collection.append(geo_data_batch)
-            # suffix_collection.append(prefix_list)
-            # still batchiftied (List[List[GeoDat]] --> flatten to list[Geodata] i.e.
-            yield geo_data_batch, batch_img.detach().cpu(), prefix_list
+            batch_out = self.infer_batch(batch,
+                                         num_of_nuc_types,
+                                         batch_base_coords,
+                                         offset)
+            geo_data_batch, batch_img_cpu, prefix_list = batch_out
+            yield geo_data_batch, batch_img_cpu, prefix_list
+
         # return sum(geo_collection, []), sum(suffix_collection, [])

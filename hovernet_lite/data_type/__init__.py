@@ -40,3 +40,9 @@ class NucGeoData(TypedDict):
     tile_size: int
     geometry: InstGeo
     properties: InstProperties
+
+
+class ErrorInfo(TypedDict):
+    error_msg: str
+    stack_trace: str
+    name: Union[str, List[str]]

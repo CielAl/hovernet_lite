@@ -3,10 +3,10 @@ Read tile regions from WSI using json that records the list of tile bbox (left, 
 --> List[List[Tuple[int, int, int, int]] nested by ROIs (nest_level = 1)
 We assume that [WSI_FILENAME_WITH_EXTENSION][BBOX_SUFFIX] = BBOX Filename
 """
-from hovernet_lite.infer._helper import main_process
+from hovernet_lite.infer._pipeline import main_process
 from hovernet_lite._import_openslide import openslide
 from hovernet_lite.util.misc import load_json, List
-from hovernet_lite.logger import get_logger
+from hovernet_lite.logger import GlobalLoggers
 from hovernet_lite.args import BaseArgs
 from hovernet_lite.infer_manager.dataset_proto import SimpleSeqDataset, pre_processor
 import sys
@@ -96,7 +96,7 @@ def _sanitize_files(wsi_files, bbox_files, bbox_suffix):
         basename = os.path.basename(wsi)
         corresponding_bbox_name = f"{basename}{bbox_suffix}"
         if corresponding_bbox_name not in bbox_set:
-            logger.warning(f"{corresponding_bbox_name} not found in bbox lists")
+            GlobalLoggers.instance().get_logger(__name__).warning(f"{corresponding_bbox_name} not found in bbox lists")
             wsi_files.remove(wsi)
     return wsi_files
 
@@ -121,7 +121,7 @@ def wsi_tile_coords(wsi_files,
     """
     # remove wsi  from the list that does not have a corresponding bbox
     wsi_files = _sanitize_files(wsi_files, bbox_files, bbox_suffix)
-    logger.info(f"{len(wsi_files)} images matched.")
+    GlobalLoggers.instance().get_logger(__name__).info(f"{len(wsi_files)} images matched.")
     assert len(wsi_files) > 0, f"{len(wsi_files)} images remained after matching to the bbox list"
 
     # basename --> fullpath
@@ -154,7 +154,8 @@ def wsi_tile_coords(wsi_files,
     return uri_collection, path_prefix_collection, name_prefix_collection
 
 
-def wsi_bbox_dataset(opt_in, logger_in) -> SimpleSeqDataset:
+def wsi_bbox_dataset(opt_in) -> SimpleSeqDataset:
+    logger_in = GlobalLoggers.instance().get_logger(__name__)
     logger_in.info("Generate WSI dataset with BBoxes")
     wsi_files = glob.glob(opt_in.data_pattern)
     preproc = pre_processor(opt_in.pad_size, opt.resize_in)
@@ -178,8 +179,7 @@ if __name__ == '__main__':
     argv = sys.argv[1:]
     tile_args = BBoxArgs(argv)
     opt = tile_args.get_opts()
-    logger_name = __name__
-    logger = get_logger(logger_name)
-    dataset = wsi_bbox_dataset(opt, logger)
-    main_process(opt, logger, dataset)
-
+    dataset = wsi_bbox_dataset(opt)
+    breakpoint()
+    main_process(opt, dataset)
+    GlobalLoggers.instance().get_logger(__name__).info("Done")

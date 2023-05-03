@@ -1,10 +1,12 @@
 import os.path
-from typing import Callable, Any, List
+from typing import Callable, Any, List, Union
 from PIL import Image
 from torch.utils.data import Dataset
-from torchvision.transforms import Compose, Pad, PILToTensor, CenterCrop, ToPILImage, Resize, ToTensor
+from torchvision.transforms import Compose, Pad, PILToTensor, CenterCrop, ToPILImage, Resize
 from hovernet_lite.data_type import DatasetOut
 from hovernet_lite.util.misc import find_wildcards, path_components
+from hovernet_lite.error_handler import remediate_call, ExceptionSignal
+from torch.utils.data.dataloader import default_collate, DataLoader
 
 
 def identity(value):
@@ -39,6 +41,8 @@ class SimpleSeqDataset(Dataset):
     The Dataset Interface to be use for all potential inference procedures. Returns the image representation of the
         data point and an output_name_suffix, where in export_folder (in opts) + output_name_suffix = full output path.
         The output_name_suffix may contain any new subdirectories under the export_folder.
+        Return None if the current data is unreadable, wherein the none value can be handled afterward.
+        so the pipeline won't be broken.
     """
     KEY_IMG: str = 'img'
     KEY_NAME_PREFIX: str = 'prefix'
@@ -79,11 +83,33 @@ class SimpleSeqDataset(Dataset):
         return len(self.uri_list)
 
     def __getitem__(self, index):
-        data = self.loader(self.uri_list[index])
+        # data = self.loader(self.uri_list[index])
+        input_arg = self.uri_list[index]
+        name = self.prefix_list[index]
+        # data = self.loader(input_arg)
+        data: Union[Image.Image, ExceptionSignal] = remediate_call(self.loader, __name__, name, False, input_arg)
+        if isinstance(data, ExceptionSignal):
+            return None
         if self.transforms is not None:
             data = self.transforms(data)
-        out = DatasetOut(img=data, prefix=self.prefix_list[index])
+        out = DatasetOut(img=data, prefix=name)
         return out
+
+    @staticmethod
+    def _not_none(batch):
+        return batch is not None
+
+    @staticmethod
+    def collate_drop_none(batch):
+        batch = list(filter(SimpleSeqDataset._not_none, batch))
+        if len(batch) > 0:
+            return default_collate(batch)
+        return None
+
+    def get_data_loader(self, batch_size, num_workers, pin_memory=True):
+        return DataLoader(self, batch_size=batch_size, num_workers=num_workers,
+                          collate_fn=SimpleSeqDataset.collate_drop_none,
+                          shuffle=False, pin_memory=pin_memory)
 
     @staticmethod
     def generate_path_prefix(input_path_prefix_list: List[str],

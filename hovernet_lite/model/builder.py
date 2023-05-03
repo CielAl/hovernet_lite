@@ -1,8 +1,7 @@
 import torch
 from hovernet_lite.model.hovernet import HoVerNet
-from hovernet_lite.logger import get_logger
-
-logger = get_logger(__name__)
+from hovernet_lite.logger import GlobalLoggers
+logger = GlobalLoggers.instance().get_logger(__name__)
 
 
 def create_model(mode='fast', input_ch=3, num_of_nuc_types=None, freeze=False):

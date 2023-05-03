@@ -1,5 +1,5 @@
-from hovernet_lite.infer._helper import main_process
-from hovernet_lite.logger import get_logger
+from hovernet_lite.infer._pipeline import main_process
+from hovernet_lite.logger import GlobalLoggers
 from hovernet_lite.args import BaseArgs
 from hovernet_lite.infer_manager.dataset_proto import SimpleSeqDataset, pil_loader, pre_processor
 import sys
@@ -14,7 +14,8 @@ class TileArgs(BaseArgs):
         ...
 
 
-def tile_dataset(opt_in, logger_in) -> SimpleSeqDataset:
+def tile_dataset(opt_in) -> SimpleSeqDataset:
+    logger_in = GlobalLoggers.instance().get_logger(__name__)
     files = glob.glob(opt_in.data_pattern)
     logger_in.info(f'{len(files)} files have been read.')
     preproc = pre_processor(opt_in.pad_size, opt.resize_in)
@@ -31,8 +32,6 @@ if __name__ == '__main__':
     argv = sys.argv[1:]
     tile_args = TileArgs(argv)
     opt = tile_args.get_opts()
-    logger_name = __name__
-    logger = get_logger(logger_name)
-    dataset = tile_dataset(opt, logger)
-    main_process(opt, logger, dataset)
+    dataset = tile_dataset(opt)
+    main_process(opt, dataset)
 
