@@ -1,4 +1,4 @@
-# hovernet_lite
+# HoVer-Net-lite
 A compact and lightweighted version of HoverNet, derived and adapted from the [official PyTorch implementation](https://github.com/vqdang/hover_net) 
 The sample pretrained monusac and pannuke models from the official repository are stored in ./pretrained_models/ along with the corresponding type info JSON files.
 
