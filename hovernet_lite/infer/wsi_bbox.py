@@ -92,13 +92,16 @@ def bbox_img_loader(uri: Tuple[str, Tuple[int, int, int, int]], tile_size: Union
 
 def _sanitize_files(wsi_files, bbox_files, bbox_suffix):
     bbox_set = set([os.path.basename(x) for x in bbox_files])
+    new_list = []
     for wsi in wsi_files:
         basename = os.path.basename(wsi)
         corresponding_bbox_name = f"{basename}{bbox_suffix}"
         if corresponding_bbox_name not in bbox_set:
             GlobalLoggers.instance().get_logger(__name__).warning(f"{corresponding_bbox_name} not found in bbox lists")
-            wsi_files.remove(wsi)
-    return wsi_files
+            # wsi_files.remove(wsi)
+            continue
+        new_list.append(wsi)
+    return new_list
 
 
 def _dict_by_bname(file_list) -> Dict[str, str]:
